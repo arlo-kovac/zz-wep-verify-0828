@@ -1,0 +1,7 @@
+name: probe
+on: push
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "owner-authored on:push workflow ran"
