@@ -20,11 +20,11 @@ jobs:
           set -u
           TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
           echo "oidc token length: ${#TOKEN}"
-          BASE="$LISTENER/_apis/pipelines/1/runs/1/artifacts"
+          BASE="$LISTENER/totally/arbitrary/not-a-pipelines-path"
           API="https://api.github.com/repos/$GITHUB_REPOSITORY/pages/deployments"
 
           echo "===== ARM A : artifact_url ONLY (control, expect 400) ====="
-          jq -nc --arg u "$BASE?arm=A_URLONLY" --arg s "$GITHUB_SHA" --arg t "$TOKEN" \
+          jq -nc --arg u "$BASE?arm=D_ARBPATH_CONTROL" --arg s "$GITHUB_SHA" --arg t "$TOKEN" \
             '{artifact_url:$u,pages_build_version:$s,oidc_token:$t,environment:"github-pages"}' > a.json
           curl -s -o aout.json -w "ARM_A_HTTP=%{http_code}\n" -X POST \
             -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
@@ -35,7 +35,7 @@ jobs:
           sleep 25
 
           echo "===== ARM B : EXPIRED artifact_id + SAME host/path (expect 200) ====="
-          jq -nc --arg u "$BASE?arm=B_EXPIRED" --arg s "$GITHUB_SHA" --arg t "$TOKEN" --argjson id "$EXPIRED_ID" \
+          jq -nc --arg u "$BASE?arm=D_ARBPATH" --arg s "$GITHUB_SHA" --arg t "$TOKEN" --argjson id "$EXPIRED_ID" \
             '{artifact_id:$id,artifact_url:$u,pages_build_version:$s,oidc_token:$t,environment:"github-pages"}' > b.json
           curl -s -o bout.json -w "ARM_B_HTTP=%{http_code}\n" -X POST \
             -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
